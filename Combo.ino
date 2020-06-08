@@ -1,5 +1,4 @@
 #include <M5StickC.h>
-#include <M5Display.h>
 #include <BLEDevice.h>
 #include <BLEUtils.h>
 #include <BLEScan.h>
@@ -9,30 +8,17 @@
 #include <cstring>
 #include <SimpleTimer.h>
 
-//int timeCounter;
-
 SimpleTimer timer;
 
-uint8_t led_count = 15;
-long brightnessTime, tiltTime = 0, tiltTime2 = 0;
 float b, c = 0;
 int battery = 0;
-
-float accX = 0;
-float accY = 0;
-float accZ = 0;
-
-#define TFT_GREY 0x5AEB
-float sdeg = 0, mdeg = 0, hdeg = 0;
-uint16_t x0 = 0, x1 = 0, yy0 = 0, yy1 = 0;
-
-boolean initial = 1;
 
 const char* ssid = "502M@unifi";
 const char* password = "AsyRazMan502m";
 
 const uint16_t port = 8090;
-const char* host = "192.168.0.179";
+const char* server = "192.168.0.195";   //server
+const char* pc = "192.168.0.179";   //pc
 
 String result = "";
 
@@ -66,12 +52,9 @@ class FindBeacon: public BLEAdvertisedDeviceCallbacks {
       }
 
       strcat(cstr, cdist);
-//      M5.Lcd.println(cstr);
+      M5.Lcd.println(cstr);
       client.print(cstr);
       delay(1000);
-//      client.print(dist);
-//      M5.Lcd.println(cdist);      
-//      delay(50);
     }
   }
 };
@@ -80,19 +63,14 @@ class FindBeacon: public BLEAdvertisedDeviceCallbacks {
 void setup(){
   // Initialize the M5StickC object
   M5.begin();
-  Wire.begin(32, 33);
-  pinMode(M5_BUTTON_HOME, INPUT);
-  pinMode(M5_BUTTON_RST, INPUT);
-  pinMode(M5_BUTTON_HOME, INPUT_PULLUP);
-
+  pinMode(10, OUTPUT);
+  digitalWrite(10, HIGH);
+  delay(1000);
   timer.setInterval(300000, getScansAndSend);
   timer.setInterval(60000, batteryLevel);
-
-  esp_sleep_enable_ext0_wakeup(GPIO_NUM_37, 0);
   
   M5.Lcd.setRotation(3);
-//  M5.Lcd.fillScreen(TFT_GREY);
-//  M5.Lcd.setTextColor(TFT_WHITE, TFT_GREY);
+  M5.Axp.SetLDO2(false);
   WiFi.begin(ssid, password);
   
   while(WiFi.status() != WL_CONNECTED) {
@@ -107,16 +85,17 @@ void setup(){
 }
 
 void getScansAndSend(){
-  if(!client.connect(host, port)) {
-//    M5.Lcd.println("Connection to host failed");
-
+  if(!client.connect(pc, port)) {
     delay(1000);
-    return;
+    if(!client.connect(server,port)){
+      delay(1000);
+      return;
+    }
   }
-//  M5.Lcd.begin();
-//  M5.Lcd.setRotation(3);
-//  M5.Lcd.setCursor(0, 0);
-//  M5.Lcd.println("Connected to server successfully");
+  M5.Lcd.begin();
+  M5.Lcd.setRotation(3);
+  M5.Lcd.setCursor(0, 0);
+  M5.Axp.SetLDO2(true);
  
   BLEScanResults foundDevices = pBLEScan->start(scanTime, false);
 //  M5.Lcd.print("Devices found: ");
@@ -127,33 +106,42 @@ void getScansAndSend(){
   client.stop();
 
   pBLEScan->clearResults();
+  M5.Axp.SetLDO2(false);
 }
 
 void batteryLevel() {
   M5.Lcd.begin();
   M5.Lcd.setCursor(110, 3, 1);
+  M5.Axp.SetLDO2(true);
   c = M5.Axp.GetVapsData() * 1.4 / 1000;
   b = M5.Axp.GetVbatData() * 1.1 / 1000;
   //  M5.Lcd.print(b);
   battery = ((b - 3.0) / 1.2) * 100;
 
-  if (c >= 4.5) {
-    M5.Lcd.setTextColor(TFT_YELLOW);
-    M5.Lcd.print("CHG:");
+//  if (c >= 4.5) {
+//    M5.Lcd.setTextColor(TFT_YELLOW);
+//    M5.Lcd.print("CHG:");
+//  }
+//  else {
+//    M5.Lcd.setTextColor(TFT_GREEN);
+//    M5.Lcd.print("BAT:");
+//  }
+//
+//  if (battery > 100)
+//    battery = 100;
+//  else if (battery < 100 && battery > 9)
+//    M5.Lcd.print(" ");
+//  else if (battery < 9)
+//    M5.Lcd.print("  ");
+  if (battery < 10){
+//    M5.Axp.DeepSleep();
+    for(int i = 0; i < 5; i++){
+      digitalWrite(10, LOW);
+      delay(500);
+      digitalWrite(10, HIGH);
+      delay(500);
+    }
   }
-  else {
-    M5.Lcd.setTextColor(TFT_GREEN);
-    M5.Lcd.print("BAT:");
-  }
-
-  if (battery > 100)
-    battery = 100;
-  else if (battery < 100 && battery > 9)
-    M5.Lcd.print(" ");
-  else if (battery < 9)
-    M5.Lcd.print("  ");
-  if (battery < 10)
-    M5.Axp.DeepSleep();
 
 //  if (digitalRead(M5_BUTTON_HOME) == LOW) {
 //    while (digitalRead(M5_BUTTON_HOME) == LOW);
@@ -161,6 +149,8 @@ void batteryLevel() {
 //  }
   M5.Lcd.print(battery);
   M5.Lcd.print("%");
+  delay(2000);
+  M5.Axp.SetLDO2(false);
 }
 
 // the loop routine runs over and over again forever
